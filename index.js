@@ -7,14 +7,28 @@ const cookieParser = require('cookie-parser')
 const app = express()
 
 connectToDB()
-  
-  app.use(cors());
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://carbazaar-frontend.onrender.com/'
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 
 app.use(express.json())
 app.use(cookieParser())
 
 app.use('/api/auth', require('./router/auth'))
-app.use('/api/car',require('./router/car'))
+app.use('/api/car', require('./router/car'))
 
 // const sql = require("mssql");
 
@@ -44,9 +58,9 @@ app.use('/api/car',require('./router/car'))
 // connectDB();
 
 app.get('/', (req, res) => {
-    res.send("Server is listening")
+  res.send("Server is listening")
 })
 
 app.listen(3000, () => {
-    console.log('Server is listening')
+  console.log('Server is listening')
 })
