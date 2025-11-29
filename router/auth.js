@@ -61,7 +61,7 @@ router.post('/signup', async (req, res) => {
                         name, mobile
                     })
                     const token = jwt.sign({ mobile }, JWT_secret);
-                    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'strict', maxAge: 24 * 60 * 60 * 1000 })
+                    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 })
                     res.json({ message: `Welcome ${name}` })
                 }
                 else {
@@ -96,7 +96,7 @@ router.post('/login', async (req, res) => {
                 if (String(otp) === String(storedOTP)) {
                     const token = jwt.sign({ mobile }, JWT_secret)
                     await RedisClient.del(mobile); // Delete OTP after verification
-                    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'strict', maxAge: 24 * 60 * 60 * 1000 })
+                    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 24 * 60 * 60 * 1000 })
                     res.json({ message: `Welcome back, ${user.name}` })
                 }
                 else {
