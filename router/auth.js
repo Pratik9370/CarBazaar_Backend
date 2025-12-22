@@ -7,7 +7,6 @@ require('dotenv').config();
 const redis = require("redis");
 const crypto = require("crypto");
 const geoip = require("geoip-lite");
-const fetch = require("node-fetch");
 
 const JWT_secret = process.env.JWT_SECRET_KEY
 
@@ -144,64 +143,49 @@ router.get(`/getUser`, authenticateUser, async (req, res) => {
     }
 })
 
-
 router.get("/getCarsInUserCity", async (req, res) => {
-  try {
-    // 1️⃣ Detect IP
-    let ip =
-      req.headers["x-forwarded-for"]?.split(",")[0] ||
-      req.socket.remoteAddress ||
-      null;
+    try {
+        // 1. Try to get IP from the 'x-forwarded-for' header (standard for proxies)
+        // 2. Fallback to remoteAddress if no proxy is used
+        let userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-    console.log("Detected IP:", ip);
-
-    // 2️⃣ Dev mode manual city override
-    let userCity = null;
-    if (process.env.NODE_ENV === "development" && req.query.city) {
-      userCity = req.query.city;
-    }
-
-    // 3️⃣ GeoIP lookup (only if city not manually set)
-    if (!userCity && ip) {
-      const geo = geoip.lookup(ip);
-
-      if (geo?.ll) {
-        const [lat, lon] = geo.ll;
-        try {
-          const geoRes = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
-            { headers: { "User-Agent": "CarBazaar/1.0 (contact: admin@carbazaar.com)" } }
-          );
-          if (geoRes.ok) {
-            const geoData = await geoRes.json();
-            userCity =
-              geoData?.address?.city ||
-              geoData?.address?.town ||
-              geoData?.address?.village ||
-              null;
-          }
-        } catch (err) {
-          console.error("Reverse geocoding failed:", err.message);
+        // Handle the "Comma Separated" list issue
+        // In production, x-forwarded-for can be "clientIP, proxy1, proxy2"
+        if (userIp && userIp.includes(',')) {
+            userIp = userIp.split(',')[0].trim();
         }
-      }
+
+        // Clean up IPv4-mapped IPv6 (removes ::ffff:)
+        if (userIp && userIp.includes('::ffff:')) {
+            userIp = userIp.replace('::ffff:', '');
+        }
+
+        console.log(userIp)
+
+        const ipLookup = async () => {
+            const response = await fetch(`https://ipapi.co/${userIp}/json/`)
+            const data = await response.json()
+            return data.city
+        }
+
+        const userCity = await ipLookup()
+
+        // 4️⃣ MongoDB query (case-insensitive, substring match)
+        const cars_in_userCity = userCity
+            ? await Car_model.find({ City: { $regex: userCity, $options: "i" } })
+            : [];
+
+        console.log("Detected city:", userCity);
+        console.log("Cars found:", cars_in_userCity.length);
+
+        return res.status(200).json({
+            City: userCity, // null if unknown
+            cars_in_userCity,
+        });
+    } catch (err) {
+        console.error("Server error:", err.message);
+        return res.status(200).json({ City: null, cars_in_userCity: [] });
     }
-
-    // 4️⃣ MongoDB query (case-insensitive, substring match)
-    const cars_in_userCity = userCity
-      ? await Car_model.find({ City: { $regex: userCity, $options: "i" } })
-      : [];
-
-    console.log("Detected city:", userCity);
-    console.log("Cars found:", cars_in_userCity.length);
-
-    return res.status(200).json({
-      City: userCity, // null if unknown
-      cars_in_userCity,
-    });
-  } catch (err) {
-    console.error("Server error:", err.message);
-    return res.status(200).json({ City: null, cars_in_userCity: [] });
-  }
 });
 
 
