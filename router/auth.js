@@ -189,7 +189,7 @@ router.get("/getCarsInUserCity", async (req, res) => {
             : [];
 
         return res.status(200).json({
-            detectedLocation,
+            City: detectedLocation,
             cars_in_userCity,
         });
     } catch (err) {
