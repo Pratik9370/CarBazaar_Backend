@@ -153,57 +153,38 @@ router.get("/getCarsInUserCity", async (req, res) => {
             req.socket.remoteAddress ||
             null;
 
-        if (!ip) {
-            return res.status(200).json({
-                City: null,
-                cars_in_userCity: [],
-            });
-        }
+        let userCity = null;
 
         const geo = geoip.lookup(ip);
 
-        if (!geo || !geo.ll) {
-            return res.status(200).json({
-                City: null,
-                cars_in_userCity: [],
-            });
-        }
-
-        const [lat, lon] = geo.ll;
-
-        let userCity = null;
-        try {
-            const geoRes = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
-                {
-                    headers: {
-                        "User-Agent": "CarBazaar/1.0 (contact: admin@carbazaar.com)",
-                    },
-                }
-            );
-
-            if (geoRes.ok) {
+        if (geo?.ll) {
+            const [lat, lon] = geo.ll;
+            try {
+                const geoRes = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
+                    { headers: { "User-Agent": "CarBazaar/1.0 (contact: admin@carbazaar.com)" } }
+                );
                 const geoData = await geoRes.json();
                 userCity =
                     geoData?.address?.city ||
                     geoData?.address?.town ||
                     geoData?.address?.village ||
                     null;
+            } catch {
+                userCity = null;
             }
-        } catch (err) {
-            console.error("Reverse geocoding failed:", err.message);
-            userCity = null;
         }
 
-        const cars_in_userCity =
-            userCity
-                ? await Car_model.find({ City: { $regex: `^${userCity}$`, $options: "i" } })
-                : [];
+        // userCity null asel tar Mongo query empty array return karel
+        const cars_in_userCity = userCity
+            ? await Car_model.find({ City: { $regex: userCity, $options: "i" } })
+            : [];
 
         return res.status(200).json({
-            City: userCity,
-            cars_in_userCity,
+            City: userCity,             // null jhale tar frontend la user select option dya
+            cars_in_userCity
         });
+
     } catch (err) {
         console.error("Server error:", err.message);
         return res.status(200).json({
