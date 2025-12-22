@@ -143,7 +143,6 @@ router.get(`/getUser`, authenticateUser, async (req, res) => {
     }
 })
 
-import fetch from "node-fetch";
 
 router.get("/getCarsInUserCity/:IP", async (req, res) => {
   try {
