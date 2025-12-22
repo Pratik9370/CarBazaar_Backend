@@ -19,8 +19,15 @@ const RedisClient = redis.createClient({
     password: "yWyRMxvbUIbHzUs7N6CZMPo74JDjswGc"
 });
 RedisClient.on("error", (err) => console.log("Redis Error:", err));
-RedisClient.connect();
 
+(async () => {
+    try {
+        await RedisClient.connect();
+        console.log("Redis connected");
+    } catch (err) {
+        console.error("Redis connection failed", err);
+    }
+})();
 
 router.post('/sendOTP', async (req, res) => {
 
@@ -28,7 +35,7 @@ router.post('/sendOTP', async (req, res) => {
 
     try {
         const OTPlen = 6
-        const OTP = (0).toString(); 
+        const OTP = (0).toString();
         // const OTP = crypto.randomInt(10 ** (OTPlen - 1), 10 ** OTPlen).toString();
         await RedisClient.setEx(mobile, 300, OTP); // Store OTP with 5-minute expiry
         // client.messages
@@ -120,10 +127,35 @@ router.get(`/getUser`, authenticateUser, async (req, res) => {
         const user = await User_Model.findOne({ mobile }).populate('SavedCars').exec()
         const reg_cars = await Car_model.find({ Owner: user._id })
         const saved_cars = await user.SavedCars
-        res.status(200).json({ user, reg_cars, saved_cars })
+
+        const key = `recent:cars:${user._id}`;
+        const carIds = await RedisClient.lRange(key, 0, -1);
+        const cars = await Car_model.find({ _id: { $in: carIds } });
+        // Preserve order
+        const carsMap = {};
+        cars.forEach(car => carsMap[car._id] = car);
+        const recentlyViewedCars = carIds.map(id => carsMap[id]).filter(Boolean);
+
+        res.status(200).json({ user, reg_cars, saved_cars, recentlyViewedCars })
     } catch (err) {
         res.json(err)
     }
+})
+
+router.get('/getCarsInUserCity', async (req, res) => {
+    const { lat, long } = req.query
+    try {
+        const location = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${long}&localityLanguage=en`
+        );
+        const userCity = await location.json();
+        const cars_in_userCity = await Car_model.find({ City: userCity.locality }).collation({ locale: "en", strength: 2 });
+        res.status(200).json({ cars_in_userCity, City: userCity.locality })
+    }
+    catch (err) {
+        res.status(500).json({ err })
+    }
+
 })
 
 router.get('/verify', authenticateUser, (req, res) => {

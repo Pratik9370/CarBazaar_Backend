@@ -3,7 +3,23 @@ const Car_model = require('../models/Car')
 const User_model = require('../models/User')
 const authenticateUser = require('../middleware/authenticateUser')
 const upload = require('../config/Multer')
+const redis = require("redis");
 const router = express.Router()
+
+const RedisClient = redis.createClient({
+    url: "redis://redis-13490.crce182.ap-south-1-1.ec2.redns.redis-cloud.com:13490",
+    password: "yWyRMxvbUIbHzUs7N6CZMPo74JDjswGc"
+});
+RedisClient.on("error", (err) => console.log("Redis Error:", err));
+
+(async () => {
+    try {
+        await RedisClient.connect();
+        console.log("Redis connected");
+    } catch (err) {
+        console.error("Redis connection failed", err);
+    }
+})();
 
 router.post('/registerCar', authenticateUser, upload.single('image'), async (req, res) => {
     const { Brand, Model, Variant, Body_type, Reg_year, KM, Fuel_type, Transmission, Seating_capacity, Owner_type, City, Area, Expected_price } = req.body
@@ -76,9 +92,45 @@ router.post('/unsaveCar', async (req, res) => {
     }
 })
 
-router.post('/showCarDetails', (req, res) => {
-    const { car_id } = req.body
+router.post('/carSellerDetails', async (req, res) => {
+    try {
+        const { car_id } = req.body
+        const car = await Car_model.findOne({ _id: car_id }).populate({ path: 'Owner', select: 'name mobile' })
+        res.status(200).json({ name: car.Owner.name, mobile: car.Owner.mobile })
+    }
+    catch (err) {
+        console.error(err)
+    }
 })
+
+router.post('/recentlyViewedCars', authenticateUser, async (req, res) => {
+    try {
+        const car_id = req.body?.car_id;
+        if (!car_id) {
+            return res.status(400).json({ error: "car_id is required" });
+        }
+
+        const user = await User_model.findOne({ mobile: req.user.mobile });
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const key = `recent:cars:${user._id}`;
+
+        await RedisClient.sendCommand(['LREM', key, '0', car_id]);
+        await RedisClient.sendCommand(['LPUSH', key, car_id]);
+        await RedisClient.sendCommand(['LTRIM', key, '0', '9']);
+        await RedisClient.sendCommand(['EXPIRE', key, '604800']);
+
+        res.json({ success: true });
+
+    } catch (err) {
+        console.error("Redis recently viewed error:", err);
+        res.status(500).json({ error: "Failed to update recently viewed cars" });
+    }
+});
+
+
 
 
 module.exports = router;
