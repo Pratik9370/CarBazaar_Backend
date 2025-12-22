@@ -147,58 +147,69 @@ router.get(`/getUser`, authenticateUser, async (req, res) => {
 
 router.get("/getCarsInUserCity", async (req, res) => {
     try {
-        const ip = req.headers["x-forwarded-for"]?.split(",")[0] || req.socket.remoteAddress;
+
+        const ip =
+            req.headers["x-forwarded-for"]?.split(",")[0] ||
+            req.socket.remoteAddress ||
+            null;
+
+        if (!ip) {
+            return res.status(200).json({
+                City: null,
+                cars_in_userCity: [],
+            });
+        }
+
         const geo = geoip.lookup(ip);
 
         if (!geo || !geo.ll) {
             return res.status(200).json({
                 City: null,
-                cars_in_userCity: []
+                cars_in_userCity: [],
             });
         }
 
-        const [lat, lng] = geo.ll;
+        const [lat, lon] = geo.ll;
 
-        const geoRes = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
-            {
-                headers: {
-                    "User-Agent": "CarBazaar/1.0 (contact: admin@carbazaar.com)"
+        let userCity = null;
+        try {
+            const geoRes = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
+                {
+                    headers: {
+                        "User-Agent": "CarBazaar/1.0 (contact: admin@carbazaar.com)",
+                    },
                 }
+            );
+
+            if (geoRes.ok) {
+                const geoData = await geoRes.json();
+                userCity =
+                    geoData?.address?.city ||
+                    geoData?.address?.town ||
+                    geoData?.address?.village ||
+                    null;
             }
-        );
-
-        if (!geoRes.ok) {
-            throw new Error("Reverse geocoding failed");
+        } catch (err) {
+            console.error("Reverse geocoding failed:", err.message);
+            userCity = null;
         }
 
-        const geoData = await geoRes.json();
+        const cars_in_userCity =
+            userCity
+                ? await Car_model.find({ City: { $regex: `^${userCity}$`, $options: "i" } })
+                : [];
 
-        const userCity =
-            geoData.address.city ||
-            geoData.address.town ||
-            geoData.address.village ||
-            null;
-
-        if (!userCity) {
-            return res.status(200).json({
-                City: null,
-                cars_in_userCity: []
-            });
-        }
-
-        const cars_in_userCity = await Car_model.find({
-            City: { $regex: `^${userCity}$`, $options: "i" }
-        });
-
-        res.status(200).json({
+        return res.status(200).json({
             City: userCity,
-            cars_in_userCity
+            cars_in_userCity,
         });
-
     } catch (err) {
-        console.error("ERROR:", err.message);
-        res.status(500).json({ message: "Server error" });
+        console.error("Server error:", err.message);
+        return res.status(200).json({
+            City: null,
+            cars_in_userCity: [],
+        }); // never return 500
     }
 });
 
