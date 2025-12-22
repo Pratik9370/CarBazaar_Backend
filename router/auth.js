@@ -145,46 +145,56 @@ router.get(`/getUser`, authenticateUser, async (req, res) => {
 
 router.get("/getCarsInUserCity", async (req, res) => {
     try {
-        // 1. Try to get IP from the 'x-forwarded-for' header (standard for proxies)
-        // 2. Fallback to remoteAddress if no proxy is used
         let userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-        // Handle the "Comma Separated" list issue
-        // In production, x-forwarded-for can be "clientIP, proxy1, proxy2"
+        // Clean IP
         if (userIp && userIp.includes(',')) {
             userIp = userIp.split(',')[0].trim();
         }
-
-        // Clean up IPv4-mapped IPv6 (removes ::ffff:)
         if (userIp && userIp.includes('::ffff:')) {
             userIp = userIp.replace('::ffff:', '');
         }
 
-        console.log(userIp)
+        // 🛠️ FIX: Localhost development check
+        // Use a dummy public IP (e.g., Alwar) if testing locally
+        const isLocal = userIp === '::1' || userIp === '127.0.0.1';
+        const queryIp = isLocal ? '152.58.33.95' : userIp;
 
         const ipLookup = async () => {
-            const response = await fetch(`https://ipapi.co/${userIp}/json/`)
-            const data = await response.json()
-            return data.city
-        }
+            try {
+                // Using ip-api.com for better district support
+                const response = await fetch(`http://ip-api.com/json/${queryIp}?fields=status,city,district,regionName`);
+                const data = await response.json();
+                
+                if (data.status === 'fail') return null;
 
-        const userCity = await ipLookup()
+                // Priority: District -> City -> State
+                return data.district || data.city || data.regionName;
+            } catch (e) {
+                console.error("IP API Error:", e.message);
+                return null;
+            }
+        };
 
-        // 4️⃣ MongoDB query (case-insensitive, substring match)
-        const cars_in_userCity = userCity
-            ? await Car_model.find({ City: { $regex: userCity, $options: "i" } })
+        const detectedLocation = await ipLookup();
+
+        // MongoDB query: Search by District OR City
+        const cars_in_userCity = detectedLocation
+            ? await Car_model.find({ 
+                $or: [
+                    { City: { $regex: detectedLocation, $options: "i" } },
+                    { District: { $regex: detectedLocation, $options: "i" } }
+                ]
+            })
             : [];
 
-        console.log("Detected city:", userCity);
-        console.log("Cars found:", cars_in_userCity.length);
-
         return res.status(200).json({
-            City: userCity, // null if unknown
+            detectedLocation,
             cars_in_userCity,
         });
     } catch (err) {
         console.error("Server error:", err.message);
-        return res.status(200).json({ City: null, cars_in_userCity: [] });
+        return res.status(500).json({ detectedLocation: null, cars_in_userCity: [] });
     }
 });
 
