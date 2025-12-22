@@ -146,52 +146,62 @@ router.get(`/getUser`, authenticateUser, async (req, res) => {
 
 
 router.get("/getCarsInUserCity", async (req, res) => {
-    try {
+  try {
+    // 1️⃣ Detect IP
+    let ip =
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.socket.remoteAddress ||
+      null;
 
-        const ip =
-            req.headers["x-forwarded-for"]?.split(",")[0] ||
-            req.socket.remoteAddress ||
-            null;
+    console.log("Detected IP:", ip);
 
-        let userCity = null;
-
-        const geo = geoip.lookup(ip);
-
-        if (geo?.ll) {
-            const [lat, lon] = geo.ll;
-            try {
-                const geoRes = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
-                    { headers: { "User-Agent": "CarBazaar/1.0 (contact: admin@carbazaar.com)" } }
-                );
-                const geoData = await geoRes.json();
-                userCity =
-                    geoData?.address?.city ||
-                    geoData?.address?.town ||
-                    geoData?.address?.village ||
-                    null;
-            } catch {
-                userCity = null;
-            }
-        }
-
-        // userCity null asel tar Mongo query empty array return karel
-        const cars_in_userCity = userCity
-            ? await Car_model.find({ City: { $regex: userCity, $options: "i" } })
-            : [];
-
-        return res.status(200).json({
-            City: userCity,             // null jhale tar frontend la user select option dya
-            cars_in_userCity
-        });
-
-    } catch (err) {
-        console.error("Server error:", err.message);
-        return res.status(200).json({
-            City: null,
-            cars_in_userCity: [],
-        }); // never return 500
+    // 2️⃣ Dev mode manual city override
+    let userCity = null;
+    if (process.env.NODE_ENV === "development" && req.query.city) {
+      userCity = req.query.city;
     }
+
+    // 3️⃣ GeoIP lookup (only if city not manually set)
+    if (!userCity && ip) {
+      const geo = geoip.lookup(ip);
+
+      if (geo?.ll) {
+        const [lat, lon] = geo.ll;
+        try {
+          const geoRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`,
+            { headers: { "User-Agent": "CarBazaar/1.0 (contact: admin@carbazaar.com)" } }
+          );
+          if (geoRes.ok) {
+            const geoData = await geoRes.json();
+            userCity =
+              geoData?.address?.city ||
+              geoData?.address?.town ||
+              geoData?.address?.village ||
+              null;
+          }
+        } catch (err) {
+          console.error("Reverse geocoding failed:", err.message);
+        }
+      }
+    }
+
+    // 4️⃣ MongoDB query (case-insensitive, substring match)
+    const cars_in_userCity = userCity
+      ? await Car_model.find({ City: { $regex: userCity, $options: "i" } })
+      : [];
+
+    console.log("Detected city:", userCity);
+    console.log("Cars found:", cars_in_userCity.length);
+
+    return res.status(200).json({
+      City: userCity, // null if unknown
+      cars_in_userCity,
+    });
+  } catch (err) {
+    console.error("Server error:", err.message);
+    return res.status(200).json({ City: null, cars_in_userCity: [] });
+  }
 });
 
 
