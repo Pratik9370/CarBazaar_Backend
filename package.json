@@ -23,6 +23,7 @@
     "mssql": "^12.1.0",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
+    "node-fetch": "^3.3.2",
     "redis": "^5.10.0",
     "twilio": "^5.10.6"
   }

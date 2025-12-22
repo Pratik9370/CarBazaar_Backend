@@ -7,6 +7,7 @@ require('dotenv').config();
 const redis = require("redis");
 const crypto = require("crypto");
 const geoip = require("geoip-lite");
+const fetch = require("node-fetch");
 
 const JWT_secret = process.env.JWT_SECRET_KEY
 
@@ -159,8 +160,17 @@ router.get("/getCarsInUserCity/:IP", async (req, res) => {
     const [lat, lng] = geo.ll;
 
     const geoRes = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+      {
+        headers: {
+          "User-Agent": "CarBazaar/1.0 (contact: admin@carbazaar.com)"
+        }
+      }
     );
+
+    if (!geoRes.ok) {
+      throw new Error("Reverse geocoding failed");
+    }
 
     const geoData = await geoRes.json();
 
@@ -187,7 +197,7 @@ router.get("/getCarsInUserCity/:IP", async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("ERROR:", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });
