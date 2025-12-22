@@ -6,6 +6,7 @@ const authenticateUser = require('../middleware/authenticateUser')
 require('dotenv').config();
 const redis = require("redis");
 const crypto = require("crypto");
+const geoip = require("geoip-lite");
 
 const JWT_secret = process.env.JWT_SECRET_KEY
 
@@ -142,21 +143,33 @@ router.get(`/getUser`, authenticateUser, async (req, res) => {
     }
 })
 
-router.get('/getCarsInUserCity', async (req, res) => {
-    const { lat, long } = req.query
-    try {
-        const location = await fetch(
-            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${long}&localityLanguage=en`
-        );
-        const userCity = await location.json();
-        const cars_in_userCity = await Car_model.find({ City: userCity.locality }).collation({ locale: "en", strength: 2 });
-        res.status(200).json({ cars_in_userCity, City: userCity.locality })
-    }
-    catch (err) {
-        res.status(500).json({ err })
+router.get("/getCarsInUserCity/:IP", async (req, res) => {
+  try {
+    const ip = req.params.IP;
+    const geo = geoip.lookup(ip);
+
+    if (!geo || !geo.city) {
+      return res.status(200).json({
+        City: null,
+        cars_in_userCity: []
+      });
     }
 
-})
+    const userCity = geo.city;
+
+    const cars_in_userCity = await Car_model.find({ City: userCity }).collation({ locale: "en", strength: 2 });
+
+    res.status(200).json({
+      City: userCity,
+      cars_in_userCity
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 router.get('/verify', authenticateUser, (req, res) => {
     res.sendStatus(200);

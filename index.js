@@ -22,6 +22,16 @@ app.use(cors({
 app.use(express.json())
 app.use(cookieParser())
 
+app.use((req, res, next) => {
+  const ip =
+    req.headers["x-forwarded-for"]?.split(",")[0] ||
+    req.socket.remoteAddress;
+
+  req.userIp = ip;
+  next();
+});
+
+
 app.use('/api/auth', require('./router/auth'))
 app.use('/api/car', require('./router/car'))
 
