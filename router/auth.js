@@ -198,8 +198,6 @@ router.get("/getCarsInUserCity", async (req, res) => {
     }
 });
 
-
-
 router.get('/verify', authenticateUser, (req, res) => {
     res.sendStatus(200);
 });

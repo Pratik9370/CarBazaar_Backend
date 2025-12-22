@@ -12,12 +12,9 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
-    let resourceType = "image"; // default
-
     return {
       folder: "Cars",
-      resource_type: resourceType,
-      public_id: file.originalname.split(".")[0], // optional: keep original name
+      resource_type: "image",
     };
   },
 });
