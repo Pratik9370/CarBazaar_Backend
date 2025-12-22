@@ -143,21 +143,44 @@ router.get(`/getUser`, authenticateUser, async (req, res) => {
     }
 })
 
+import fetch from "node-fetch";
+
 router.get("/getCarsInUserCity/:IP", async (req, res) => {
   try {
     const ip = req.params.IP;
     const geo = geoip.lookup(ip);
 
-    if (!geo || !geo.city) {
+    if (!geo || !geo.ll) {
       return res.status(200).json({
         City: null,
         cars_in_userCity: []
       });
     }
 
-    const userCity = geo.city;
+    const [lat, lng] = geo.ll;
 
-    const cars_in_userCity = await Car_model.find({ City: userCity }).collation({ locale: "en", strength: 2 });
+    const geoRes = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+    );
+
+    const geoData = await geoRes.json();
+
+    const userCity =
+      geoData.address.city ||
+      geoData.address.town ||
+      geoData.address.village ||
+      null;
+
+    if (!userCity) {
+      return res.status(200).json({
+        City: null,
+        cars_in_userCity: []
+      });
+    }
+
+    const cars_in_userCity = await Car_model.find({
+      City: { $regex: `^${userCity}$`, $options: "i" }
+    });
 
     res.status(200).json({
       City: userCity,
@@ -169,6 +192,7 @@ router.get("/getCarsInUserCity/:IP", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
 
 
 router.get('/verify', authenticateUser, (req, res) => {
