@@ -143,58 +143,107 @@ router.get(`/getUser`, authenticateUser, async (req, res) => {
     }
 })
 
-router.get("/getCarsInUserCity", async (req, res) => {
+router.post("/getCarsInUserCity", async (req, res) => {
     try {
-        let userIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-        // Clean IP
-        if (userIp && userIp.includes(',')) {
-            userIp = userIp.split(',')[0].trim();
+        let detectedLocation = null;
+
+        const { latitude, longitude } = req.body || {};
+
+        // ===========================
+        // GPS LOCATION
+        // ===========================
+        if (latitude && longitude) {
+
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+            );
+
+            const data = await response.json();
+
+            const address = data.address;
+
+            detectedLocation =
+                address.city ||
+                address.town ||
+                address.village ||
+                address.county ||
+                address.state_district;
+
         }
-        if (userIp && userIp.includes('::ffff:')) {
-            userIp = userIp.replace('::ffff:', '');
-        }
 
-        // 🛠️ FIX: Localhost development check
-        // Use a dummy public IP (e.g., Alwar) if testing locally
-        const isLocal = userIp === '::1' || userIp === '127.0.0.1';
-        const queryIp = isLocal ? '152.58.33.95' : userIp;
+        // ===========================
+        // IP LOCATION (Fallback)
+        // ===========================
+        if (!detectedLocation) {
 
-        const ipLookup = async () => {
-            try {
-                // Using ip-api.com for better district support
-                const response = await fetch(`http://ip-api.com/json/${queryIp}?fields=status,city,district,regionName`);
-                const data = await response.json();
-                
-                if (data.status === 'fail') return null;
+            let userIp =
+                req.headers["x-forwarded-for"] ||
+                req.socket.remoteAddress;
 
-                // Priority: District -> City -> State
-                return data.district || data.city || data.regionName;
-            } catch (e) {
-                console.error("IP API Error:", e.message);
-                return null;
+            if (userIp?.includes(",")) {
+                userIp = userIp.split(",")[0].trim();
             }
-        };
 
-        const detectedLocation = await ipLookup();
+            if (userIp?.includes("::ffff:")) {
+                userIp = userIp.replace("::ffff:", "");
+            }
 
-        // MongoDB query: Search by District OR City
-        const cars_in_userCity = detectedLocation
-            ? await Car_model.find({ 
-                $or: [
-                    { City: { $regex: detectedLocation, $options: "i" } },
-                    { District: { $regex: detectedLocation, $options: "i" } }
-                ]
-            })
+            const isLocal =
+                userIp === "::1" ||
+                userIp === "127.0.0.1";
+
+            const queryIp = isLocal
+                ? "152.58.33.95"
+                : userIp;
+
+            const response = await fetch(
+                `http://ip-api.com/json/${queryIp}?fields=status,city,district,regionName`
+            );
+
+            const data = await response.json();
+
+            if (data.status !== "fail") {
+                detectedLocation =
+                    data.district ||
+                    data.city ||
+                    data.regionName;
+            }
+        }
+
+        const cars = detectedLocation
+            ? await Car_model.find({
+                  $or: [
+                      {
+                          City: {
+                              $regex: detectedLocation,
+                              $options: "i",
+                          },
+                      },
+                      {
+                          District: {
+                              $regex: detectedLocation,
+                              $options: "i",
+                          },
+                      },
+                  ],
+              })
             : [];
 
-        return res.status(200).json({
+        res.json({
             City: detectedLocation,
-            cars_in_userCity,
+            cars_in_userCity: cars,
         });
+
     } catch (err) {
-        console.error("Server error:", err.message);
-        return res.status(500).json({ detectedLocation: null, cars_in_userCity: [] });
+
+        console.error(err);
+
+        res.status(500).json({
+            City: null,
+            cars_in_userCity: [],
+        });
+
     }
 });
 
