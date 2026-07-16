@@ -167,11 +167,15 @@ router.post("/getCarsInUserCity", async (req, res) => {
 
             const properties = data.features[0]?.properties;
 
-            const district =
+            let district =
+                properties?.state_district ||
                 properties?.county ||
                 properties?.city ||
-                properties?.state_district ||
                 null;
+
+            if (district) {
+                district = district.replace(/\s+District$/i, "");
+            }
 
             console.log("District:", district);
 
