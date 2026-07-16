@@ -159,7 +159,10 @@ router.post("/getCarsInUserCity", async (req, res) => {
                 `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
             );
 
-            const data = await response.json();
+            const text = await response.text();
+            console.log("Nominatim response:", text);
+
+            return res.status(200).json({ text });
 
             const address = data.address;
 
@@ -213,21 +216,21 @@ router.post("/getCarsInUserCity", async (req, res) => {
 
         const cars = detectedLocation
             ? await Car_model.find({
-                  $or: [
-                      {
-                          City: {
-                              $regex: detectedLocation,
-                              $options: "i",
-                          },
-                      },
-                      {
-                          District: {
-                              $regex: detectedLocation,
-                              $options: "i",
-                          },
-                      },
-                  ],
-              })
+                $or: [
+                    {
+                        City: {
+                            $regex: detectedLocation,
+                            $options: "i",
+                        },
+                    },
+                    {
+                        District: {
+                            $regex: detectedLocation,
+                            $options: "i",
+                        },
+                    },
+                ],
+            })
             : [];
 
         res.json({
