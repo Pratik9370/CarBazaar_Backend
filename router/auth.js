@@ -156,22 +156,26 @@ router.post("/getCarsInUserCity", async (req, res) => {
         if (latitude && longitude) {
 
             const response = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+                `https://api.geoapify.com/v1/geocode/reverse?lat=${latitude}&lon=${longitude}&apiKey=${process.env.GEOAPIFY_API_KEY}`
             );
 
-            const text = await response.text();
-            console.log("Nominatim response:", text);
+            if (!response.ok) {
+                throw new Error("Geoapify API failed");
+            }
 
-            return res.status(200).json({ text });
+            const data = await response.json();
 
-            const address = data.address;
+            const properties = data.features[0]?.properties;
 
-            detectedLocation =
-                address.city ||
-                address.town ||
-                address.village ||
-                address.county ||
-                address.state_district;
+            const district =
+                properties?.county ||
+                properties?.city ||
+                properties?.state_district ||
+                null;
+
+            console.log("District:", district);
+
+            detectedLocation = district;
 
         }
 
