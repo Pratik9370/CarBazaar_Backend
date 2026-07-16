@@ -208,16 +208,19 @@ router.post("/getCarsInUserCity", async (req, res) => {
                 ? "152.58.33.95"
                 : userIp;
 
-            console.log("Using IP fallback");
-
             const response = await fetch(
                 `http://ip-api.com/json/${queryIp}?fields=status,city,district,regionName`
             );
 
-            console.log("Status:", response.status);
+            const data = await response.json();
+            console.log(data)
 
-            const text = await response.text();
-            console.log(text);
+            if (data.status !== "fail") {
+                detectedLocation =
+                    data.district ||
+                    data.city ||
+                    data.regionName;
+            }
         }
 
         const cars = detectedLocation
