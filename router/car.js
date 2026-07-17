@@ -44,25 +44,29 @@ router.post('/registerCar', authenticateUser, upload.single('image'), async (req
 
 router.post('/carList', async (req, res) => {
 
-    const { price, fuel, body, transmission, brand, year, search } = req.body;
+    const { price, fuel, body, transmission, brand, year, search, city } = req.body;
 
-    const cars = await Car_model.find()
+    const query = {};
 
-    // Convert numbers safely
-    const maxPrice = Number(price) || Infinity;
-    const maxYear = Number(year) || Infinity;
+    if (price) query.Expected_price = { $lte: Number(price) };
+    if (fuel) query.Fuel_type = fuel;
+    if (body) query.Body_type = body; // or {$regex: body, $options: 'i'} if needed
+    if (transmission) query.Transmission = transmission;
+    if (brand) query.Brand = brand;
+    if (year) query.Reg_year = { $lte: Number(year) };
 
-    const filteredCars = cars.filter((car) => {
-        return (
-            car.Expected_price <= maxPrice &&
-            (fuel ? car.Fuel_type === fuel : true) &&
-            (body ? car.Body_type.includes(body) : true) &&
-            (transmission ? car.Transmission === transmission : true) &&
-            (brand ? car.Brand === brand : true) &&
-            car.Reg_year <= maxYear &&
-            (search ? (car.Brand.toLowerCase().includes(search.toLowerCase()) || car.Model.toLowerCase().includes(search.toLowerCase())) : true)
-        );
-    });
+    if (city) {
+        query.City = { $regex: city, $options: "i" };
+    }
+
+    if (search) {
+        query.$or = [
+            { Brand: { $regex: search, $options: "i" } },
+            { Model: { $regex: search, $options: "i" } },
+        ];
+    }
+
+    const filteredCars = await Car_model.find(query);
 
     res.json({ filteredCars });
 });
