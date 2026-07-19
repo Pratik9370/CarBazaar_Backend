@@ -143,16 +143,34 @@ router.post("/predict", async (req, res) => {
             req.body
         );
 
-        console.log(response.data);
+        const predictedPrice = response.data.predicted_price;
+
+        let margin;
+
+        if (predictedPrice < 500000) {
+            margin = 0.08;
+        } else if (predictedPrice < 1000000) {
+            margin = 0.06;
+        } else if (predictedPrice < 2000000) {
+            margin = 0.05;
+        } else {
+            margin = 0.04;
+        }
+
+        const lowerBound = Math.round(predictedPrice * (1 - margin));
+        const upperBound = Math.round(predictedPrice * (1 + margin));
 
         return res.status(200).json({
             success: true,
-            prediction: response.data.predicted_price
+            priceRange: {
+                lowerBound,
+                upperBound
+            }
         });
 
     } catch (error) {
 
-        console.error(error.message);
+        console.error(error.response?.data || error.message);
 
         return res.status(500).json({
             success: false,
