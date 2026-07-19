@@ -5,6 +5,7 @@ const authenticateUser = require('../middleware/authenticateUser')
 const upload = require('../config/Multer')
 const redis = require("redis");
 const router = express.Router()
+const axios = require("axios");
 
 const RedisClient = redis.createClient({
     url: "redis://redis-13490.crce182.ap-south-1-1.ec2.redns.redis-cloud.com:13490",
@@ -134,7 +135,31 @@ router.post('/recentlyViewedCars', authenticateUser, async (req, res) => {
     }
 });
 
+router.post("/predict", async (req, res) => {
+    try {
 
+        const response = await axios.post(
+            "https://carbazaar-ml-model.onrender.com/predict",
+            req.body
+        );
+
+        console.log(response.data);
+
+        return res.status(200).json({
+            success: true,
+            prediction: response.data.predicted_price
+        });
+
+    } catch (error) {
+
+        console.error(error.message);
+
+        return res.status(500).json({
+            success: false,
+            message: "Prediction failed"
+        });
+    }
+});
 
 
 module.exports = router;
