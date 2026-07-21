@@ -44,45 +44,20 @@ router.post('/registerCar', authenticateUser, upload.single('image'), async (req
 })
 
 router.post('/carList', async (req, res) => {
-    const { price, fuel, body, transmission, brand, year, search, city } = req.body;
 
-    console.log(req.body);
+    const { price, fuel, body, transmission, brand, year, search, city } = req.body;
 
     const query = {};
 
-    if (price) {
-        query.Expected_price = { $lte: Number(price) };
-        console.log("Added price filter");
-    }
-
-    if (fuel) {
-        query.Fuel_type = fuel;
-        console.log("Added fuel filter");
-    }
-
-    if (body) {
-        query.Body_type = body;
-        console.log("Added body filter");
-    }
-
-    if (transmission) {
-        query.Transmission = transmission;
-        console.log("Added transmission filter");
-    }
-
-    if (brand) {
-        query.Brand = brand;
-        console.log("Added brand filter");
-    }
-
-    if (year) {
-        query.Reg_year = { $lte: Number(year) };
-        console.log("Added year filter");
-    }
+    if (price) query.Expected_price = { $lte: Number(price) };
+    if (fuel) query.Fuel_type = fuel;
+    if (body) query.Body_type = body; // or {$regex: body, $options: 'i'} if needed
+    if (transmission) query.Transmission = transmission;
+    if (brand) query.Brand = brand;
+    if (year) query.Reg_year = { $lte: Number(year) };
 
     if (city) {
         query.City = { $regex: city, $options: "i" };
-        console.log("Added city filter");
     }
 
     if (search) {
@@ -90,13 +65,9 @@ router.post('/carList', async (req, res) => {
             { Brand: { $regex: search, $options: "i" } },
             { Model: { $regex: search, $options: "i" } },
         ];
-        console.log("Added search filter");
     }
 
-    console.log("Final Query:", query);
-
     const filteredCars = await Car_model.find(query);
-    console.log("Cars found:", filteredCars.length);
 
     res.json({ filteredCars });
 });
