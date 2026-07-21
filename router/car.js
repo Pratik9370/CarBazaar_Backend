@@ -43,33 +43,10 @@ router.post('/registerCar', authenticateUser, upload.single('image'), async (req
     }
 })
 
-router.post('/carList', async (req, res) => {
-
-    const { price, fuel, body, transmission, brand, year, search, city } = req.body;
-
-    const query = {};
-
-    if (price) query.Expected_price = { $lte: Number(price) };
-    if (fuel) query.Fuel_type = fuel;
-    if (body) query.Body_type = body; // or {$regex: body, $options: 'i'} if needed
-    if (transmission) query.Transmission = transmission;
-    if (brand) query.Brand = brand;
-    if (year) query.Reg_year = { $lte: Number(year) };
-
-    if (city) {
-        query.City = { $regex: city, $options: "i" };
-    }
-
-    if (search) {
-        query.$or = [
-            { Brand: { $regex: search, $options: "i" } },
-            { Model: { $regex: search, $options: "i" } },
-        ];
-    }
-
-    const filteredCars = await Car_model.find(query);
-
-    res.json({ filteredCars });
+router.post("/carList", async (req, res) => {
+    const cars = await Car_model.find();
+    console.log(cars.length);
+    res.json({ filteredCars: cars });
 });
 
 router.post('/saveCar', async (req, res) => {
