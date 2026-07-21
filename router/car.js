@@ -44,56 +44,45 @@ router.post('/registerCar', authenticateUser, upload.single('image'), async (req
 })
 
 router.post('/carList', async (req, res) => {
-
     const { price, fuel, body, transmission, brand, year, search, city } = req.body;
 
     console.log(req.body);
 
-    let query = {};
-
-    let cars = await Car_model.find(query);
-    console.log("No filters:", cars.length);
+    const query = {};
 
     if (price) {
         query.Expected_price = { $lte: Number(price) };
-        cars = await Car_model.find(query);
-        console.log("After price:", cars.length);
+        console.log("Added price filter");
     }
 
     if (fuel) {
         query.Fuel_type = fuel;
-        cars = await Car_model.find(query);
-        console.log("After fuel:", cars.length);
+        console.log("Added fuel filter");
     }
 
     if (body) {
         query.Body_type = body;
-        cars = await Car_model.find(query);
-        console.log("After body:", cars.length);
+        console.log("Added body filter");
     }
 
     if (transmission) {
         query.Transmission = transmission;
-        cars = await Car_model.find(query);
-        console.log("After transmission:", cars.length);
+        console.log("Added transmission filter");
     }
 
     if (brand) {
         query.Brand = brand;
-        cars = await Car_model.find(query);
-        console.log("After brand:", cars.length);
+        console.log("Added brand filter");
     }
 
     if (year) {
         query.Reg_year = { $lte: Number(year) };
-        cars = await Car_model.find(query);
-        console.log("After year:", cars.length);
+        console.log("Added year filter");
     }
 
     if (city) {
         query.City = { $regex: city, $options: "i" };
-        cars = await Car_model.find(query);
-        console.log("After city:", cars.length);
+        console.log("Added city filter");
     }
 
     if (search) {
@@ -101,12 +90,15 @@ router.post('/carList', async (req, res) => {
             { Brand: { $regex: search, $options: "i" } },
             { Model: { $regex: search, $options: "i" } },
         ];
-
-        cars = await Car_model.find(query);
-        console.log("After search:", cars.length);
+        console.log("Added search filter");
     }
 
-    res.json({ filteredCars: cars });
+    console.log("Final Query:", query);
+
+    const filteredCars = await Car_model.find(query);
+    console.log("Cars found:", filteredCars.length);
+
+    res.json({ filteredCars });
 });
 
 router.post('/saveCar', async (req, res) => {
