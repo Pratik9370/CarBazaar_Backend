@@ -23,10 +23,10 @@ RedisClient.on("error", (err) => console.log("Redis Error:", err));
 })();
 
 router.post('/registerCar', authenticateUser, upload.single('image'), async (req, res) => {
-    const { Brand, Model, Variant, Body_type, Reg_year, KM, Fuel_type, Transmission, Seating_capacity, Owner_type, City, Area, Expected_price } = req.body
+    const { Brand, Model, Variant, Body_type, Reg_year, KM, Fuel_type, Transmission, Seating_capacity, Owner_type, Engine_capacity, Max_power, City, Area, Expected_price } = req.body
     const user = await User_model.findOne({ mobile: req.user.mobile })
     try {
-        const car = await Car_model.create({ Brand, Model, Variant, Body_type, Reg_year, KM, Fuel_type, Transmission, Seating_capacity, Owner_type, City, Area, Expected_price, Owner: user._id })
+        const car = await Car_model.create({ Brand, Model, Variant, Body_type, Reg_year, KM, Fuel_type, Transmission, Seating_capacity, Owner_type, Engine_capacity, Max_power, City, Area, Expected_price, Owner: user._id })
         await user.RegisteredCars.push(car._id)
         await user.save()
         if (req.file) {

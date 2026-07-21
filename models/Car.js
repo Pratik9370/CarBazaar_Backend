@@ -41,6 +41,14 @@ const carSchema = mongoose.Schema({
         type:String,
         required:true
     },
+    Engine_capacity:{
+        type:String,
+        required:true
+    },
+     Max_power:{
+        type:String,
+        required:true
+     },
     City:{
         type:String
     },
