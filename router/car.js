@@ -43,9 +43,69 @@ router.post('/registerCar', authenticateUser, upload.single('image'), async (req
     }
 })
 
-router.post("/carList", async (req, res) => {
-    const cars = await Car_model.find();
-    console.log(cars.length);
+router.post('/carList', async (req, res) => {
+
+    const { price, fuel, body, transmission, brand, year, search, city } = req.body;
+
+    console.log(req.body);
+
+    let query = {};
+
+    let cars = await Car_model.find(query);
+    console.log("No filters:", cars.length);
+
+    if (price) {
+        query.Expected_price = { $lte: Number(price) };
+        cars = await Car_model.find(query);
+        console.log("After price:", cars.length);
+    }
+
+    if (fuel) {
+        query.Fuel_type = fuel;
+        cars = await Car_model.find(query);
+        console.log("After fuel:", cars.length);
+    }
+
+    if (body) {
+        query.Body_type = body;
+        cars = await Car_model.find(query);
+        console.log("After body:", cars.length);
+    }
+
+    if (transmission) {
+        query.Transmission = transmission;
+        cars = await Car_model.find(query);
+        console.log("After transmission:", cars.length);
+    }
+
+    if (brand) {
+        query.Brand = brand;
+        cars = await Car_model.find(query);
+        console.log("After brand:", cars.length);
+    }
+
+    if (year) {
+        query.Reg_year = { $lte: Number(year) };
+        cars = await Car_model.find(query);
+        console.log("After year:", cars.length);
+    }
+
+    if (city) {
+        query.City = { $regex: city, $options: "i" };
+        cars = await Car_model.find(query);
+        console.log("After city:", cars.length);
+    }
+
+    if (search) {
+        query.$or = [
+            { Brand: { $regex: search, $options: "i" } },
+            { Model: { $regex: search, $options: "i" } },
+        ];
+
+        cars = await Car_model.find(query);
+        console.log("After search:", cars.length);
+    }
+
     res.json({ filteredCars: cars });
 });
 
