@@ -68,6 +68,7 @@ router.post('/carList', async (req, res) => {
     }
 
     const filteredCars = await Car_model.find(query);
+    console.log(filteredCars)
 
     res.json({ filteredCars });
 });
