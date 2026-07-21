@@ -49,7 +49,7 @@ router.post('/carList', async (req, res) => {
 
     const query = {};
 
-    if (price) query.Expected_price = { $lte: Number(price) };
+    
     if (fuel) query.Fuel_type = fuel;
     if (body) query.Body_type = body; // or {$regex: body, $options: 'i'} if needed
     if (transmission) query.Transmission = transmission;
