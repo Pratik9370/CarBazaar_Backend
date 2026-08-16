@@ -22,26 +22,97 @@ RedisClient.on("error", (err) => console.log("Redis Error:", err));
     }
 })();
 
-router.post('/registerCar', authenticateUser, upload.single('image'), async (req, res) => {
-    const { Brand, Model, Variant, Body_type, Reg_year, KM, Fuel_type, Transmission, Seating_capacity, Owner_type, Engine_capacity, Max_power, City, Area, Expected_price } = req.body
-    const user = await User_model.findOne({ mobile: req.user.mobile })
-    try {
-        const car = await Car_model.create({ Brand, Model, Variant, Body_type, Reg_year, KM, Fuel_type, Transmission, Seating_capacity, Owner_type, Engine_capacity, Max_power, City, Area, Expected_price, Owner: user._id })
-        await user.RegisteredCars.push(car._id)
-        await user.save()
-        if (req.file) {
-            car.image = req.file.path; // Cloudinary URL
-            car.imagePublicId = req.file.filename; // Public ID
-            await car.save()
-            console.log(car)
-        }
-        res.json({ message: 'Car registered' })
+router.post(
+    '/registerCar',
+    authenticateUser,
+    upload.fields([
+        { name: 'image', maxCount: 1 },
+        { name: 'images', maxCount: 10 }
+    ]),
+    async (req, res) => {
 
-    } catch (err) {
-        console.log(err)
-        res.json({ message: err })
+        try {
+            console.log("BODY:", req.body);
+            console.log("FILES:", req.files);
+
+            const {
+                Brand,
+                Model,
+                Variant,
+                Body_type,
+                Reg_year,
+                KM,
+                Fuel_type,
+                Transmission,
+                Seating_capacity,
+                Owner_type,
+                Engine_capacity,
+                Max_power,
+                City,
+                Area,
+                Expected_price
+            } = req.body;
+
+            const user = await User_model.findOne({
+                mobile: req.user.mobile
+            });
+
+            // Front image
+            const frontImage = req.files.image?.[0];
+
+            // Additional images
+            const additionalImages = req.files.images || [];
+
+            console.log("FRONT IMAGE:", frontImage);
+            console.log("ADDITIONAL IMAGES:", additionalImages);
+
+            const car = await Car_model.create({
+                Brand,
+                Model,
+                Variant,
+                Body_type,
+                Reg_year,
+                KM,
+                Fuel_type,
+                Transmission,
+                Seating_capacity,
+                Owner_type,
+                Engine_capacity,
+                Max_power,
+                City,
+                Area,
+                Expected_price,
+
+                // Front image
+                image: frontImage?.path,
+                imagePublicId: frontImage?.filename,
+
+                // Additional images
+                images: additionalImages.map((img) => ({
+                    url: img.path,
+                    publicId: img.filename
+                })),
+
+                Owner: user._id
+            });
+
+            user.RegisteredCars.push(car._id);
+            await user.save();
+
+            res.json({
+                message: 'Car registered',
+                car
+            });
+
+        } catch (err) {
+            console.log(err);
+
+            res.status(500).json({
+                message: err.message
+            });
+        }
     }
-})
+);
 
 router.post('/carList', async (req, res) => {
 
