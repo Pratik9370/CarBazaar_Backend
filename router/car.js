@@ -3,6 +3,7 @@ const Car_model = require('../models/Car')
 const User_model = require('../models/User')
 const authenticateUser = require('../middleware/authenticateUser')
 const upload = require('../config/Multer')
+const cloudinary = require('../config/Multer').cloudinary
 const redis = require("redis");
 const router = express.Router()
 const axios = require("axios");
@@ -175,6 +176,107 @@ router.post('/unsaveCar', async (req, res) => {
         res.status(500).json(err)
     }
 })
+
+router.delete('/deleteCar/:car_id', authenticateUser, async (req, res) => {
+    try {
+        const { car_id } = req.params;
+
+        // Get logged-in user
+        const user = await User_model.findOne({
+            mobile: req.user.mobile
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        // Find car
+        const car = await Car_model.findById(car_id);
+
+        if (!car) {
+            return res.status(404).json({
+                message: "Car not found"
+            });
+        }
+
+        // Check ownership
+        if (car.Owner.toString() !== user._id.toString()) {
+            return res.status(403).json({
+                message: "You are not authorized to delete this car"
+            });
+        }
+
+        // -----------------------------
+        // Delete front image
+        // -----------------------------
+
+        if (car.imagePublicId) {
+            await cloudinary.uploader.destroy(car.imagePublicId);
+        }
+
+        // -----------------------------
+        // Delete additional images
+        // -----------------------------
+
+        if (car.images?.length) {
+            await Promise.all(
+                car.images.map(async (img) => {
+                    if (img.publicId) {
+                        await cloudinary.uploader.destroy(img.publicId);
+                    }
+                })
+            );
+        }
+
+        // -----------------------------
+        // Delete car document
+        // -----------------------------
+
+        await Car_model.findByIdAndDelete(car_id);
+
+        // -----------------------------
+        // Remove from owner's RegisteredCars
+        // -----------------------------
+
+        await User_model.findByIdAndUpdate(
+            user._id,
+            {
+                $pull: {
+                    RegisteredCars: car._id
+                }
+            }
+        );
+
+        // -----------------------------
+        // Remove from everyone's SavedCars
+        // -----------------------------
+
+        await User_model.updateMany(
+            {
+                SavedCars: car._id
+            },
+            {
+                $pull: {
+                    SavedCars: car._id
+                }
+            }
+        );
+
+        res.status(200).json({
+            message: "Car deleted successfully"
+        });
+
+    } catch (err) {
+        console.error("Delete car error:", err);
+
+        res.status(500).json({
+            message: "Failed to delete car",
+            error: err.message
+        });
+    }
+});
 
 router.post('/carSellerDetails', async (req, res) => {
     try {
