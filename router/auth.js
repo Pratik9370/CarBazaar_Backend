@@ -10,11 +10,8 @@ const geoip = require("geoip-lite");
 
 const JWT_secret = process.env.JWT_SECRET_KEY
 
-const accountSid = 'AC6ccb4a7e7f5a7a504136166a29a41702';
-const authToken = '59f3ae39f3e47cb219b5b040fb298ae9';
-const client = require('twilio')(accountSid, authToken);
-const router = express.Router()
 
+const router = express.Router()
 const RedisClient = redis.createClient({
     url: "redis://redis-13490.crce182.ap-south-1-1.ec2.redns.redis-cloud.com:13490",
     password: "yWyRMxvbUIbHzUs7N6CZMPo74JDjswGc"
@@ -30,28 +27,63 @@ RedisClient.on("error", (err) => console.log("Redis Error:", err));
     }
 })();
 
-router.post('/sendOTP', async (req, res) => {
 
-    const { mobile, username } = await req.body
+router.post('/sendOTP', async (req, res) => {
+    const { mobile, username } = req.body;
 
     try {
-        const OTPlen = 6
-        const OTP = (0).toString();
-        // const OTP = crypto.randomInt(10 ** (OTPlen - 1), 10 ** OTPlen).toString();
-        await RedisClient.setEx(mobile, 300, OTP); // Store OTP with 5-minute expiry
-        // client.messages
-        //     .create({
-        //         body: OTP,
-        //         messagingServiceSid: 'MGcaaa81138a4036562691c0ace5404474',
-        //         to: `+91${mobile}`
-        //     })
-        //     .then(message => console.log(message.sid));
-        res.json({ message: `OTP sent is to ${mobile}` })
-    } catch (err) {
-        res.json({ err })
-    }
+        // Generate 6-digit OTP
+        const OTPlen = 6;
 
-})
+        const OTP = crypto
+            .randomInt(10 ** (OTPlen - 1), 10 ** OTPlen)
+            .toString();
+
+        // Store OTP in Redis for 5 minutes
+        await RedisClient.setEx(mobile, 300, OTP);
+
+        // Send OTP using TextBee
+        const response = await fetch(
+            'https://api.textbee.dev/api/v1/gateway/send-sms',
+            {
+                method: 'POST',
+                headers: {
+                    'x-api-key': process.env.TEXTBEE_API_KEY,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    recipients: [`+91${mobile}`],
+                    message: `Your CarBazaar OTP is ${OTP}. It is valid for 5 minutes.`,
+                }),
+            }
+        );
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+
+            throw new Error(
+                error.error || `TextBee HTTP ${response.status}`
+            );
+        }
+
+        const data = await response.json();
+
+        console.log('TextBee response:', data);
+
+        res.json({
+            message: `OTP sent to ${mobile}`
+        });
+
+    } catch (err) {
+        console.error('OTP error:', err);
+
+        res.status(500).json({
+            message: 'Failed to send OTP'
+        });
+    }
+});
+
+
 
 router.post('/signup', async (req, res) => {
     try {
@@ -92,35 +124,79 @@ router.post('/signup', async (req, res) => {
 })
 
 router.post('/login', async (req, res) => {
-
     try {
-        const { mobile, otp } = req.body
+        const { mobile, otp } = req.body;
 
-        try {
-            const user = await User_Model.findOne({ mobile })
+        const user = await User_Model.findOne({ mobile });
 
-            if (user) {
-                const storedOTP = await RedisClient.get(mobile);
-                if (String(otp) === String(storedOTP)) {
-                    const token = jwt.sign({ mobile }, JWT_secret)
-                    await RedisClient.del(mobile); // Delete OTP after verification
-                    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'none', maxAge: 24 * 60 * 60 * 1000 })
-                    res.json({ message: `Welcome back, ${user.name}` })
-                }
-                else {
-                    res.json({ message: 'OTP is invalid' })
-                }
-            }
-            else {
-                res.status(200).json({ message: 'User with this mobile is not registered' })
-            }
-        } catch (err) {
-            res.status(500).json({ err })
+        if (!user) {
+            return res.status(200).json({
+                message: 'User with this mobile is not registered'
+            });
         }
+
+        // Developer login - does NOT consume TextBee/Redis OTP
+        const isDeveloperLogin =
+            process.env.DEV_OTP_BYPASS === 'true' &&
+            String(mobile) === String(process.env.DEV_MOBILE) &&
+            String(otp) === String(process.env.DEV_OTP);
+
+        if (isDeveloperLogin) {
+            const token = jwt.sign(
+                { mobile },
+                JWT_secret,
+                { expiresIn: '24h' }
+            );
+
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: true,
+                sameSite: 'none',
+                maxAge: 24 * 60 * 60 * 1000
+            });
+
+            return res.json({
+                message: `Developer login successful, ${user.name}`
+            });
+        }
+
+        // Normal user OTP login
+        const storedOTP = await RedisClient.get(mobile);
+
+        if (String(otp) !== String(storedOTP)) {
+            return res.status(401).json({
+                message: 'OTP is invalid'
+            });
+        }
+
+        // Delete OTP after successful verification
+        await RedisClient.del(mobile);
+
+        const token = jwt.sign(
+            { mobile },
+            JWT_secret,
+            { expiresIn: '24h' }
+        );
+
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none',
+            maxAge: 24 * 60 * 60 * 1000
+        });
+
+        return res.json({
+            message: `Welcome back, ${user.name}`
+        });
+
     } catch (err) {
-        res.status(500).json({ err })
+        console.error(err);
+
+        return res.status(500).json({
+            message: 'Internal server error'
+        });
     }
-})
+});
 
 router.get(`/getUser`, authenticateUser, async (req, res) => {
     const mobile = req.user.mobile
