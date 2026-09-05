@@ -130,10 +130,18 @@ router.post('/carList', async (req, res) => {
         };
     }
     if (fuel) query.Fuel_type = fuel;
-    if (body) query.Body_type = body; // or {$regex: body, $options: 'i'} if needed
+
+    if (body) {
+        if (body === "Utility Vehicles") {
+            query.Body_type = { $in: ["SUV", "MUV/MPV", "Crossover"] };
+        } else {
+            query.Body_type = body;
+        }
+    }
+
     if (transmission) query.Transmission = transmission;
     if (brand) query.Brand = brand;
-    if (year) query.Reg_year = { $lte: Number(year) };
+    if (year) query.Reg_year = { $gte: Number(year) };
 
     if (city) {
         query.City = { $regex: city, $options: "i" };
